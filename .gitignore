@@ -148,7 +148,7 @@ cython_debug/
 .vscode
 
 # Hide Wordlists
-tfd/files/*
+/files/*
 
 # PyCharm
 .idea/
@@ -161,3 +161,4 @@ proxies.txt
 
 # Hide Data
 scrapeMeanings/spiders/data
+files/mwd.txt
