@@ -33,18 +33,35 @@ class GaleSpider(scrapy.Spider):
     def getMeanings(self, response):
         item = TfdItem()
         sources = response.xpath('//div[@id="Definition"]/section/@data-src').getall()
+
+        # get GEM
         if 'gem' not in sources:
             yield None
         elif 'gem' in sources:
             gem = response.xpath('//section[@data-src="gem"]')
             item['word'] = gem.xpath('./h2/text()').get()
-            if gem.xpath('./div[@class="runseg"]'): # 如果底下有很多节点
+            if gem.xpath('./h3'): # 如果底下有很多节点。典型的特征是有h3
                 # 分析实例：https://medical-dictionary.thefreedictionary.com/bronchitis
                 # 还得写正则啊
-                nodes = gem.xpath('./child:*')
+                nodes = gem.xpath('./child::*')
+                # 关于Axes of Xpath：https://www.w3school.com.cn/xpath/xpath_axes.asp
                 obj = dict()
-                tmp = ''
+                keys = list() # 存放字典的键
                 for node in nodes:
-                    if re.search('<h3>.*</h3>', node.get()) is not None:
+                    # 逻辑还需要重新打磨一下
+                    tmp = node.get()
+                    if re.search('<h3>.*</h3>', tmp) is not None:
                         # 如果是<h3>，那么说明该节点是一个小标题
-                        
+                        tmp = node.get()
+                        obj[tmp] = ''
+                        keys.append(tmp)
+                    elif re.search('<div class="runseg">.*</div>', tmp) or re.search('<h4>.*</h4>', tmp):
+                        obj[keys[-1]] += tmp.get()
+                    elif re.search('<div class="ds-single".*>.*</div>', tmp):
+                        obj['relations'] = list()
+                        href = tmp.xpath('./a/@href').getall()
+                        for link in href:
+                            link = urljoin('https://medical-dictionary.thefreedictionary.com/impotence', link)
+                            obj['relations'].append(link) # 获取所有有关系的链接
+                    else:
+                        pass
