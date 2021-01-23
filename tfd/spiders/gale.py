@@ -17,11 +17,14 @@ class GaleSpider(scrapy.Spider):
                 wordList.add(i)
         
         return sorted(list(wordList)) # 按字母顺序排好
+
+
     
     def dropTags(self, text):  # 可以用于除去HTML标签的函数
         pattern = re.compile(r"<[^>]+>", re.S)
         res = pattern.sub('', text)
         return res
+
 
     def parse(self, response):
         #pass
@@ -29,39 +32,52 @@ class GaleSpider(scrapy.Spider):
         for word in wordList:
             newUrl = urljoin('https://medical-dictionary.thefreedictionary.com/impotence', word)
             yield scrapy.Request(newUrl, callback=self.getMeanings, dont_filter=True)
-    
+
+
     def getMeanings(self, response):
         item = TfdItem()
         sources = response.xpath('//div[@id="Definition"]/section/@data-src').getall()
 
         # get GEM
-        if 'gem' not in sources:
+        if 'gem' not in sources: # 如果没有"gem"部分就跳吧
             yield None
         elif 'gem' in sources:
             gem = response.xpath('//section[@data-src="gem"]')
             item['word'] = gem.xpath('./h2/text()').get()
-            if gem.xpath('./h3'): # 如果底下有很多节点。典型的特征是有h3
-                # 分析实例：https://medical-dictionary.thefreedictionary.com/bronchitis
-                # 还得写正则啊
-                nodes = gem.xpath('./child::*')
-                # 关于Axes of Xpath：https://www.w3school.com.cn/xpath/xpath_axes.asp
-                obj = dict()
-                keys = list() # 存放字典的键
-                for node in nodes:
-                    # 逻辑还需要重新打磨一下
-                    tmp = node.get()
-                    if re.search('<h3>.*</h3>', tmp) is not None:
-                        # 如果是<h3>，那么说明该节点是一个小标题
-                        tmp = node.get()
-                        obj[tmp] = ''
-                        keys.append(tmp)
-                    elif re.search('<div class="runseg">.*</div>', tmp) or re.search('<h4>.*</h4>', tmp):
-                        obj[keys[-1]] += tmp.get()
-                    elif re.search('<div class="ds-single".*>.*</div>', tmp):
-                        obj['relations'] = list()
-                        href = tmp.xpath('./a/@href').getall()
-                        for link in href:
-                            link = urljoin('https://medical-dictionary.thefreedictionary.com/impotence', link)
-                            obj['relations'].append(link) # 获取所有有关系的链接
+            nodes = gem.xpath('./child::*')
+
+            # Branch 1: if <h3> is in nodes
+            hasBranches = False # 整个词条如果有无分支用这个布尔值来界定，默认值为False
+            keys = list() # 存放字典的键
+            obj = dict() # 盛放分支
+
+            # Branch 2: if only meaning
+            meaning = '' # 如果只有单条意思，就起用这个字段
+
+            # 两条支线
+            for node in nodes:
+                nodeGet = node.get()
+                if re.search('<h3>.*</h3>', nodeGet):
+                    # 如果是<h3>，那么说明该节点是一个小标题。整个词条都是小标题+分支的形式。
+                    # 启用分支1
+                    hasBranches = True
+                    obj[node.xpath('./text()').get()] = '' # 键值对中的值是字符串
+                    keys.append(node.xpath('./text()').get())
+                elif re.search('<div class="runseg">.*</div>', nodeGet):
+                    if hasBranches:
+                        obj[keys[-1]] += self.dropTags(nodeGet) 
                     else:
-                        pass
+                        # 如果只有一条意思，启用分支2
+                        meaning += self.dropTags(nodeGet) 
+                elif re.search('<div class="ds-single" .*>.*</div>', nodeGet):
+                    # 几乎是必经之路
+                    obj['relations'] = node.xpath('./a/@href').getall()
+                else:
+                    pass
+            
+            if hasBranches:
+                item['meanings'] = obj
+            else:
+                item['meanings'] = meaning
+
+            yield item

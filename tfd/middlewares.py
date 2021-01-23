@@ -8,6 +8,10 @@ from scrapy import signals
 # useful for handling different item types with a single interface
 from itemadapter import is_item, ItemAdapter
 
+# useful for json encode and decode
+import demjson as djson
+import requests
+
 
 class TfdSpiderMiddleware:
     # Not all methods need to be defined. If a method is not defined,
@@ -101,3 +105,29 @@ class TfdDownloaderMiddleware:
 
     def spider_opened(self, spider):
         spider.logger.info('Spider opened: %s' % spider.name)
+
+class ProxyMiddleware:
+    @classmethod
+    def get_proxy(self):
+        response = requests.get("http://127.0.0.1:5010/get/").text
+        getProxy = djson.decode(response)
+        proxy = 'http://' + (getProxy['proxy'])
+        return proxy
+        # return requests.get("http://127.0.0.1:5010/get/").text
+    
+    def process_request(self, request, spider):
+        proxy = self.get_proxy()
+        print(f"this is request ip: {proxy}")
+        request.meta["http_proxy"] = proxy
+
+    
+    def process_response(self, request, response, spider):  
+        '''对返回的response处理'''  
+        # 如果返回的response状态不是200，重新生成当前request对象  
+        if response.status != 200:  
+            proxy = self.get_proxy()  
+            print(f"this is response ip: {proxy}")  
+            # 对当前reque加上代理  
+            request.meta['http_proxy'] = proxy   
+            return request
+        return response  

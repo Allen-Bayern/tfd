@@ -160,5 +160,5 @@ note.md
 proxies.txt
 
 # Hide Data
-scrapeMeanings/spiders/data
-files/mwd.txt
+tfd/spiders/data/*
+files/*
