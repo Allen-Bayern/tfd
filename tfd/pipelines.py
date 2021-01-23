@@ -11,7 +11,7 @@ import json
 class TfdPipeline:
 
     def open_spider(self, spider):
-        self.file = open('tfd/spiders/data/tfd.json', 'w', encoding = 'utf-8')
+        self.file = open('files/gale.json', mode = 'w', encoding = 'utf-8')
 
     def close_spider(self, spider):
         self.file.close()
